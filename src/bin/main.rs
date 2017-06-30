@@ -1,8 +1,9 @@
 extern crate flossy;
 #[macro_use] extern crate clap;
+use clap::{App, Arg};
 
 fn main () {
-    let args = ClapApp::new(crate_name!())
+    let args = App::new(crate_name!())
       .version(crate_version!())
       .about(crate_description!())
       .arg(Arg::with_name("PROXY_URL")
