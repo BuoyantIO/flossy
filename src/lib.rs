@@ -16,20 +16,3 @@ extern crate httparse;
 
 pub mod downstream;
 pub mod upstream;
-
-use std::io::{Error, ErrorKind, self};
-use std::net::{SocketAddr, ToSocketAddrs};
-use futures::future::{self, Future};
-
-/// Utility function for parsing SocketAddrs
-fn parse_addr<A>(addr: A) -> io::Result<SocketAddr>
-where A: ToSocketAddrs
-    , A: std::fmt::Debug {
-    let mut iter = addr.to_socket_addrs()?;
-    iter.next()
-        .ok_or_else(|| {
-            Error::new(ErrorKind::Other
-              , format!("Could not parse {:?}: SocketAddrs iterator was empty!"
-                        , addr))
-        })
-}

@@ -1,6 +1,6 @@
 use tokio_core::net::{TcpStream, TcpStreamNew};
 use tokio_core::reactor::Core;
-use tokio_io::{AsyncRead, io};
+use tokio_io::io;
 use futures::future::{self, Future};
 use std::io::{Error, ErrorKind, Result};
 use std::fmt;

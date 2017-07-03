@@ -2,7 +2,7 @@ extern crate flossy;
 #[macro_use] extern crate clap;
 use clap::{App, Arg};
 use std::net::SocketAddr;
-use std::{thread, io};
+use std::thread;
 
 fn main () {
     let args = App::new(crate_name!())
