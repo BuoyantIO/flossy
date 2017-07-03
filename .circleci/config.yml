@@ -1,0 +1,28 @@
+version: 2
+jobs:
+  build:
+    docker:
+      - image: linkerd/rustup-nightly:v2
+
+    working_directory: ~/
+
+    steps:
+      - run:
+          name: update
+          command: cargo update
+
+      - restore_cache:
+          key: cargo.lock-{{ checksum "Cargo.lock" }}
+
+      - run:
+          name: test
+          command: cargo test
+
+      - save_cache:
+          key: cargo.lock-{{ checksum "Cargo.lock" }}
+          paths:
+            - target
+
+      - run:
+          name: lint
+          command: cargo clippy
