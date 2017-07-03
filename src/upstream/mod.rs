@@ -53,5 +53,9 @@ pub trait Test {
     fn check<'a>(response: Vec<u8>) -> Result<Status<'a>>;
 
     /// Returns the name of this test
-    fn name() -> &'static str;
+    const NAME: &'static str;
+
+    // TODO: can we add in-depth descriptions to these tests as well, a la
+    //       `rustc --explain`?
+    //          - eliza, 07/2/2017
 }

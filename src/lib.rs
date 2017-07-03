@@ -5,6 +5,7 @@
 //! Flossy is a tool for automatically performing end-to-end black-box
 //! verification of HTTP proxies. It focuses on ensuring standards compliance.
 #![feature(conservative_impl_trait)]
+#![feature(associated_consts)]
 extern crate futures;
 extern crate tokio_io;
 extern crate tokio_core;
