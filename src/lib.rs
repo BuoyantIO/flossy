@@ -14,8 +14,8 @@ extern crate tokio_service;
 extern crate tokio_minihttp;
 extern crate httparse;
 
-pub mod upstream;
 pub mod downstream;
+pub mod upstream;
 
 use std::io::{Error, ErrorKind, self};
 use std::net::{SocketAddr, ToSocketAddrs};

@@ -11,12 +11,12 @@ mod request;
 pub use self::request::*;
 #[cfg(test)] mod test;
 
-pub fn do_tests<'a>(downstream_uri: &'a str, proxy_addr: &SocketAddr)
+pub fn do_tests<'a>(upstream_uri: &'a str, proxy_addr: &SocketAddr)
                     -> Result<()> {
     let mut core = Core::new()?;
     let socket = TcpStream::connect( proxy_addr
                                    , &core.handle());
-    let  status = core.run(run::<DuplicateContentLength1>(downstream_uri, socket))?;
+    let  status = core.run(run::<DuplicateContentLength1>(upstream_uri, socket))?;
     println!("{}", status);
     Ok(())
 }
@@ -43,11 +43,11 @@ impl<'a> fmt::Display for Status<'a> {
 ///
 /// This is a function rather than a trait method so that it can return
 /// `impl Future`
-fn run<'a, T>(downstream_uri: &'a str, socket: TcpStreamNew)
+fn run<'a, T>(upstream_uri: &'a str, socket: TcpStreamNew)
          -> impl Future<Item=Status<'a>, Error=Error> + 'a
 where T: Test + 'static {
 
-    let request = T::request(downstream_uri).into_bytes();
+    let request = T::request(upstream_uri).into_bytes();
     // send the HTTP request for this test...
     let request = socket.and_then(move |socket|
         io::write_all(socket, request));

@@ -23,14 +23,14 @@ fn main () {
     let proxy_addr = value_t!(args, "PROXY_URL", SocketAddr)
         .unwrap_or_else(|e| e.exit());
     let port = value_t!(args, "port", u32).unwrap_or(7777);
-    let downstream_uri = format!("127.0.0.1:{}", port);
-    let addr: SocketAddr = downstream_uri.parse().unwrap();
+    let upstream_uri = format!("127.0.0.1:{}", port);
+    let addr: SocketAddr = upstream_uri.parse().unwrap();
 
     thread::Builder::new()
-        .spawn(move || flossy::downstream::serve(addr))
+        .spawn(move || flossy::upstream::serve(addr))
         .unwrap();
 
-    flossy::upstream::do_tests(&downstream_uri, &proxy_addr)
+    flossy::downstream::do_tests(&upstream_uri, &proxy_addr)
         .unwrap();
 
 

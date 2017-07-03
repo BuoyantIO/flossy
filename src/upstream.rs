@@ -5,9 +5,9 @@ use tokio_proto::TcpServer;
 use std::io;
 use std::net::SocketAddr;
 
-pub struct Downstream;
+pub struct Upstream;
 
-impl Service for Downstream {
+impl Service for Upstream {
     type Request = Request;
     type Response = Response;
     type Error = io::Error;
@@ -44,5 +44,5 @@ impl Service for Downstream {
 pub fn serve(addr: SocketAddr) {
     println!("Serving test server on {}", addr);
     TcpServer::new(Http, addr)
-        .serve(|| Ok(Downstream));
+        .serve(|| Ok(Upstream));
 }
