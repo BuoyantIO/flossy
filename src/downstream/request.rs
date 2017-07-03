@@ -32,7 +32,8 @@ impl<'a> Request<'a> {
     pub fn build(&self) -> String {
         let mut request = format!(
             "{} {} {}\r\n\
-             Host: {}\r\n"
+             Host: {}\r\n\
+             Connection: Close\r\n"
           , self.verb
           , self.uri
           , self.version

@@ -54,13 +54,10 @@ where T: Test + 'static {
 
     // when we recieve a response, parse the response with httparse...
     let response = request
-        .and_then(|(mut socket, _req)| {
-            let mut buf = Vec::new();
-            socket.read_buf(&mut buf).map(|_| buf)
-        });
+        .and_then(|(socket, _req)| io::read_to_end(socket, Vec::new()) );
 
     // check if the response passes this test...
-    let status = response.and_then(|bytes| {
+    let status = response.and_then(|(_, bytes)| {
         println!("{:?}", bytes);
         future::result(T::check(bytes))
     });
