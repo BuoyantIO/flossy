@@ -16,8 +16,9 @@ pub fn do_tests<'a>(upstream_uri: &'a str, proxy_addr: &SocketAddr)
     let mut core = Core::new()?;
     let socket = TcpStream::connect( proxy_addr
                                    , &core.handle());
+    // TODO: eventually this will iterate over multiple tests
     let  status = core.run(run::<DuplicateContentLength1>(upstream_uri, socket))?;
-    println!("{}", status);
+    println!("{}{}", status, DuplicateContentLength1::NAME);
     Ok(())
 }
 
@@ -63,7 +64,7 @@ where T: Test + 'static {
     });
 
     // ...and we're done!
-    status.map(|status| { println!("{}", status); status })
+    status
 }
 
 pub trait Test {
