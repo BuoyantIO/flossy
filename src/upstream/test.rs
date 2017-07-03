@@ -3,7 +3,7 @@ use super::*;
 #[test]
 fn test_default_request() {
     let req = Request::new().build();
-    assert_eq!(req, "GET / HTTP/1.1\r\n")
+    assert_eq!(req, "GET / HTTP/1.1\r\nHost: \r\n\\r\n")
 }
 
 #[test]
@@ -11,7 +11,9 @@ fn test_request_header() {
     let req = Request::new().with_header("Content-Length: 45").build();
     assert_eq!(req,
     "GET / HTTP/1.1\r\n\
-     Content-Length: 45\r\n")
+     Host: \r\n\
+     Content-Length: 45\r\n\
+     \r\n")
 }
 
 #[test]
@@ -22,6 +24,8 @@ fn test_request_multiple_same_header() {
         .build();
     assert_eq!(req,
     "GET / HTTP/1.1\r\n\
+     Host: \r\n\
      Content-Length: 45\r\n\
-     Content-Length: 20\r\n")
+     Content-Length: 20\r\n\
+     \r\n")
 }

@@ -14,6 +14,7 @@ use std::fmt::{self, Write};
 pub struct Request<'a> {
     verb: Verb
   , version: &'a str
+  , host: &'a str
   , uri: &'a str
   , headers: Vec<&'a str>
 }
@@ -30,15 +31,19 @@ impl<'a> Request<'a> {
     /// Finish building the request, returning a string
     pub fn build(&self) -> String {
         let mut request = format!(
-            "{} {} {}\r\n"
+            "{} {} {}\r\n\
+             Host: {}\r\n"
           , self.verb
           , self.uri
           , self.version
+          , self.host
         );
         for header in &self.headers {
             write!(request, "{}\r\n", header)
                 .expect("Couldn't write to string!");
         }
+        write!(request, "\r\n")
+            .expect("Couldn't write to string!");
         request
     }
 
@@ -46,7 +51,12 @@ impl<'a> Request<'a> {
         self.verb = verb; self
     }
 
-    pub fn with_uri<P>(&mut self, uri: P) -> &mut Self
+    pub fn with_host<H>(&mut self, host: H) -> &mut Self
+    where H: convert::Into<&'a str> {
+        self.host = host.into(); self
+    }
+
+    pub fn with_path<P>(&mut self, uri: P) -> &mut Self
     where P: convert::Into<&'a str> {
         self.uri = uri.into(); self
     }

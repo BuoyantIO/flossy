@@ -1,17 +1,40 @@
-use tokio_core::net::TcpStreamNew;
-use tokio_io::io;
+use tokio_core::net::{TcpStream, TcpStreamNew};
+use tokio_core::reactor::Core;
+use tokio_io::{AsyncRead, io};
 use futures::future::{self, Future};
 use std::io::{Error, ErrorKind, Result};
+use std::fmt;
+use std::net::SocketAddr;
 use httparse::{EMPTY_HEADER, Response};
 
 mod request;
 pub use self::request::*;
 #[cfg(test)] mod test;
 
+pub fn do_tests<'a>(downstream_uri: &'a str, proxy_addr: &SocketAddr)
+                    -> Result<()> {
+    let mut core = Core::new()?;
+    let socket = TcpStream::connect( proxy_addr
+                                   , &core.handle());
+    let  status = core.run(run::<DuplicateContentLength1>(downstream_uri, socket))?;
+    println!("{}", status);
+    Ok(())
+}
+
 #[derive(Debug, Copy, Clone)]
 pub enum Status<'a> { Passed
                     , Failed(&'a str)
                     }
+
+impl<'a> fmt::Display for Status<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if let &Status::Failed(why) = self {
+            write!(f, "❌\n\t{}", why)
+        } else {
+            write!(f, "✔️\n")
+        }
+    }
+}
 
 // TODO: it might be prettier (and involve fewer `Box`es) if we implemented
 //       `Future` for `Test` rather than having a `Test` make `Future`s?
@@ -20,7 +43,7 @@ pub enum Status<'a> { Passed
 ///
 /// This is a function rather than a trait method so that it can return
 /// `impl Future`
-pub fn run<'a, T>(downstream_uri: &'a str, socket: TcpStreamNew)
+fn run<'a, T>(downstream_uri: &'a str, socket: TcpStreamNew)
          -> impl Future<Item=Status<'a>, Error=Error> + 'a
 where T: Test + 'static {
 
@@ -31,14 +54,19 @@ where T: Test + 'static {
 
     // when we recieve a response, parse the response with httparse...
     let response = request
-        .and_then(|(socket, _req)| io::read_to_end(socket, Vec::new()) );
+        .and_then(|(mut socket, _req)| {
+            let mut buf = Vec::new();
+            socket.read_buf(&mut buf).map(|_| buf)
+        });
 
     // check if the response passes this test...
-    let status = response.and_then(|(_socket, bytes)|
-        future::result(T::check(bytes)));
+    let status = response.and_then(|bytes| {
+        println!("{:?}", bytes);
+        future::result(T::check(bytes))
+    });
 
     // ...and we're done!
-    status
+    status.map(|status| { println!("{}", status); status })
 }
 
 pub trait Test {
@@ -64,7 +92,8 @@ impl Test for DuplicateContentLength1 {
 
     fn request<'a>(uri: &'a str) -> String {
         Request::new()
-            .with_uri(format!("{}/test1", uri).as_ref())
+            .with_path("/test1")
+            .with_host(uri)
             .build()
     }
 
