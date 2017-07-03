@@ -18,7 +18,8 @@ pub fn do_tests<'a>(upstream_uri: &'a str, proxy_addr: &SocketAddr)
                                    , &core.handle());
     // TODO: eventually this will iterate over multiple tests
     let  status = core.run(run::<DuplicateContentLength1>(upstream_uri, socket))?;
-    println!("{}{}", status, DuplicateContentLength1::NAME);
+    // TODO: make a cool spinner while the test is in progress :) :) :)
+    println!("{}...\t{}",DuplicateContentLength1::NAME, status);
     Ok(())
 }
 
