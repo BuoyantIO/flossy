@@ -6,3 +6,7 @@ fn two_content_length_headers<A>(addr: A) -> BoxFuture<String, String>
 where A: ToSocketAddrs {
     unimplemented!()
 }
+
+mod request;
+pub use self::request::*;
+#[cfg(test)] mod test;
