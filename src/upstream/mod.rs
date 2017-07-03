@@ -14,8 +14,8 @@ pub use self::request::*;
 
 #[derive(Debug, Copy, Clone)]
 pub enum Status<'a> { Passed
-                , Failed(&'a str)
-                }
+                    , Failed(&'a str)
+                    }
 
 // TODO: it might be prettier (and involve fewer `Box`es) if we implemented
 //       `Future` for `Test` rather than having a `Test` make `Future`s?
@@ -52,5 +52,6 @@ pub trait Test {
     /// Check whether the HTTP response returned by the proxy is correct
     fn check<'a>(response: Vec<u8>) -> Result<Status<'a>>;
 
-
+    /// Returns the name of this test
+    fn name() -> &'static str;
 }
