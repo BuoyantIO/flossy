@@ -4,7 +4,7 @@ jobs:
     docker:
       - image: linkerd/rustup-nightly:v2
 
-    working_directory: ~/
+    working_directory: ~/flossy
 
     steps:
       - run:
