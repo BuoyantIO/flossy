@@ -15,4 +15,4 @@ fn main () {
               .multiple(true)
               .help("Sets the level of verbosity"))
       .get_matches();
-}
+} 
