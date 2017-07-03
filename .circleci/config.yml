@@ -8,6 +8,24 @@ jobs:
 
     steps:
       - run:
+          name: install rust
+          command: /install-rust.sh
+
+      - restore_cache:
+          key: rust-{{ checksum "/rust/update-hashes/nightly-x86_64-unknown-linux-gnu" }}.0
+
+      - run:
+          name: install clippy
+          command: if [ ! -x /cargo/bin/cargo-clippy ]; then cargo install clippy ; fi
+
+      - save_cache:
+          key: rust-{{ checksum "/rust/update-hashes/nightly-x86_64-unknown-linux-gnu" }}.0
+          paths:
+            - /rust
+            - /cargo
+
+      - checkout
+      - run:
           name: update
           command: cargo update
 
