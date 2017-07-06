@@ -67,7 +67,7 @@ where T: Test + 'static {
                     future::result(T::check(bytes))
                 })
                 .map(|status| {
-                    println!("\t{}", status);
+                    println!("\t{}\n", status);
                     status
                 });
 
