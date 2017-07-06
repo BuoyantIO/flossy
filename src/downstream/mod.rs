@@ -6,6 +6,7 @@ use futures::future::{self, Future};
 use std::io::{Error, ErrorKind, Result};
 use std::fmt;
 use std::net::{Shutdown, SocketAddr};
+use slog_scope;
 use httparse::{EMPTY_HEADER, Response};
 
 mod request;
@@ -14,9 +15,14 @@ pub use self::request::*;
 
 pub fn do_tests<'a>(upstream_uri: &'a str, proxy_addr: &SocketAddr)
                     -> Result<()> {
-    DuplicateContentLength1::run(upstream_uri, &proxy_addr)?;
-    DuplicateContentLength2::run(upstream_uri, &proxy_addr)?;
-    Ok(())
+    slog_scope::scope(
+        &slog_scope::logger().new(slog_o!("component" => "downstream"))
+        , || {
+            DuplicateContentLength1::run(upstream_uri, &proxy_addr).unwrap();
+            DuplicateContentLength2::run(upstream_uri, &proxy_addr).unwrap();
+            Ok(())
+         }
+    )
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -45,13 +51,15 @@ fn test_future<'a, T>(upstream_uri: &'a str, socket: TcpStream)
          -> impl Future<Item=Status<'a>, Error=Error> + 'a
 where T: Test + 'static {
 
-    let request = T::request(upstream_uri).into_bytes();
+    let request = T::request(upstream_uri);
+    debug!("built request:\n{}", request);
+    let request = request.into_bytes();
     // send the HTTP request for this test...
     let request = io::write_all(socket, request);
 
     // when we recieve a response, parse the response with httparse...
     let response = request
-        .and_then(|(socket, _req)| io::read_to_end(socket, Vec::new()) );
+        .and_then(|(socket, _req)| { trace!("recieved {:?}", socket); io::read_to_end(socket, Vec::new()) } );
 
     // check if the response passes this test...
     let status =
@@ -59,7 +67,7 @@ where T: Test + 'static {
                     future::result(T::check(bytes))
                 })
                 .map(|status| {
-                    println!("{}...\t{}", T::NAME, status);
+                    println!("\t{}", status);
                     status
                 });
 
@@ -83,6 +91,7 @@ pub trait Test {
 
     fn run<'a>(uri: &'a str, proxy_addr: &SocketAddr) -> Result<Status<'a>>
     where Self: Sized + 'static {
+        println!("{}...", Self::NAME);
         let mut core = Core::new()?;
         let tcp =
             TcpBuilder::new_v4()?
@@ -104,6 +113,7 @@ impl Test for DuplicateContentLength1 {
     fn request<'a>(uri: &'a str) -> String {
         Request::new()
             .with_path("/test1")
+            .with_header("Connection: close")
             .with_host(uri)
             .build()
     }
@@ -113,7 +123,6 @@ impl Test for DuplicateContentLength1 {
         let mut parsed = Response::new(&mut headers);
         let _ = parsed.parse(&response)
                       .map_err(|e| Error::new(ErrorKind::Other, e))?;
-
         let status = if let Some(502) = parsed.code {
             Status::Passed
         } else {
@@ -138,6 +147,7 @@ impl Test for DuplicateContentLength2 {
             .with_path("/test2")
             .with_header("Content-Length: 45")
             .with_header("Content-Length: 20")
+            .with_header("Connection: close")
             .with_host(uri)
             .build()
     }

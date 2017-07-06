@@ -3,14 +3,36 @@ extern crate flossy;
 use clap::{App, Arg};
 use std::net::SocketAddr;
 use std::thread;
+use std::sync::Mutex;
 
-
-extern crate slog;
 extern crate slog_envlogger;
+extern crate slog_term;
 extern crate slog_scope;
+extern crate slog_async;
+extern crate slog_stdlog;
+
+/// Import longer-name versions of macros only to not collide with legacy `log`
+#[macro_use(slog_error, slog_info, slog_trace, slog_log, slog_o, slog_record,
+            slog_record_static, slog_b, slog_kv)]
+extern crate slog;
+
+use slog::Drain;
+
+//extern crate slog_async;
 
 fn main () {
+    let decorator = slog_term::TermDecorator::new().build();
+    let drain =
+        Mutex::new(slog_term::CompactFormat::new(decorator).build())
+            .fuse();
+
+    let root_log = slog::Logger::root(drain, slog_o!("version" => crate_version!()));
+
+    // slog_stdlog uses the logger from slog_scope, so set a logger there
+    let _scope_guard = slog_scope::set_global_logger(root_log);
     let _guard = slog_envlogger::init().unwrap();
+    // register slog_stdlog as the log handler with the log crate
+    //slog_stdlog::init().unwrap();
 
     let args = App::new(crate_name!())
       .version(crate_version!())

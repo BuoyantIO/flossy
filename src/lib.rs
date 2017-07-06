@@ -17,8 +17,11 @@ extern crate tokio_minihttp;
 extern crate httparse;
 extern crate net2;
 
-#[macro_use(o, kv)]
+/// Import longer-name versions of macros only to not collide with legacy `log`
+#[macro_use(slog_error, slog_info, slog_trace, slog_log, slog_o, slog_record,
+            slog_record_static, slog_b, slog_kv)]
 extern crate slog;
+extern crate slog_scope;
 
 #[macro_use]
 extern crate log;

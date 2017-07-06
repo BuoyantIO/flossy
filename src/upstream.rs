@@ -4,6 +4,7 @@ use tokio_service::Service;
 use tokio_proto::TcpServer;
 use std::io;
 use std::net::SocketAddr;
+use slog_scope;
 
 pub struct Upstream;
 
@@ -15,29 +16,29 @@ impl Service for Upstream {
 
     fn call(&self, request: Request) -> Self::Future {
         let mut response = Response::new();
-        trace!("{:?}", request);
         match request.path() {
-            "/test1" => {
-                //for h in request.headers() {
-                //    println!("{:?}", h)
-                //}
+            "/test1" => slog_scope::scope(
+                &slog_scope::logger().new(slog_o!("path" => "/test1")),
+                || {
 
-                // multiple content length headers returned by server
-                response.header("Content-Length", "45")
-                        .header("Content-Length", "20")
-                        .body("aaaaa\
-                               aaaaa\
-                               aaaaa\
-                               aaaaa\
-                               aaaaa\
-                               aaaaa\0")
-               }
-          , "/test2" => {
-              for h in request.headers() {
-                  println!("{:?}", h)
-              }
-              response.body("This shouldn't have happened!")
-          }
+                    trace!("{:?}", request);
+                    // multiple content length headers returned by server
+                    response.header("Content-Length", "45")
+                            .header("Content-Length", "20")
+                            .body("aaaaa\
+                                   aaaaa\
+                                   aaaaa\
+                                   aaaaa\
+                                   aaaaa\
+                                   aaaaa\0")
+                   })
+          , "/test2" =>  slog_scope::scope(
+              &slog_scope::logger().new(slog_o!("path" => "/test2")),
+              || {
+                  trace!("{:?}", request);
+                  info!("Request should not have been recieved.");
+                  response.body("This shouldn't have happened!")
+              })
 
           , _ => response.status_code(404, "Not Found")
         };
@@ -47,7 +48,12 @@ impl Service for Upstream {
 }
 
 pub fn serve(addr: SocketAddr) {
-    println!("Serving test server on {}", addr);
-    TcpServer::new(Http, addr)
-        .serve(|| Ok(Upstream));
+    slog_scope::scope(
+        &slog_scope::logger().new(slog_o!( "component" => "upstream"
+                                         , "address" => format!("{}", addr)))
+        , || {
+            info!("starting...");
+            TcpServer::new(Http, addr).serve(|| Ok(Upstream))
+        }
+    );
 }

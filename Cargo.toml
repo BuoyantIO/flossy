@@ -12,7 +12,9 @@ clap = "2.24"
 
 log = "0.3.8"
 slog = "2.0.6"
-slog-term = "2.0.2"
+slog-stdlog = "3.0.2"
+slog-async = "2.0.1"
+slog-term = "~2.0.2"
 slog-envlogger = "2.0.0"
 slog-scope = "4.0.0"
 
