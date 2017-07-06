@@ -9,6 +9,13 @@ description = "a tool for testing standard compliance of HTTP proxies"
 
 [dependencies]
 clap = "2.24"
+
+log = "0.3.8"
+slog = "2.0.6"
+slog-term = "2.0.2"
+slog-envlogger = "2.0.0"
+slog-scope = "4.0.0"
+
 futures = "0.1"
 tokio-io = "0.1"
 tokio-core = "0.1"

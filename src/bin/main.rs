@@ -4,7 +4,14 @@ use clap::{App, Arg};
 use std::net::SocketAddr;
 use std::thread;
 
+
+extern crate slog;
+extern crate slog_envlogger;
+extern crate slog_scope;
+
 fn main () {
+    let _guard = slog_envlogger::init().unwrap();
+
     let args = App::new(crate_name!())
       .version(crate_version!())
       .about(crate_description!())

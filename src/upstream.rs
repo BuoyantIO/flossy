@@ -15,7 +15,7 @@ impl Service for Upstream {
 
     fn call(&self, request: Request) -> Self::Future {
         let mut response = Response::new();
-        println!("{:?}", request);
+        trace!("{:?}", request);
         match request.path() {
             "/test1" => {
                 //for h in request.headers() {
