@@ -149,6 +149,11 @@ impl Test for DuplicateContentLength2 {
             .with_header("Content-Length: 20")
             .with_header("Connection: close")
             .with_host(uri)
+            .with_body("aaaaabbbbb\
+                        aaaaabbbbb\
+                        aaaaabbbbb\
+                        aaaaabbbbb\
+                        aaaaa")
             .build()
     }
 
