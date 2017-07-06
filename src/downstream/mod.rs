@@ -4,7 +4,7 @@ use tokio_io::io;
 use net2::TcpBuilder;
 use futures::future::{self, Future};
 use std::io::{Error, ErrorKind, Result};
-use std::fmt;
+use std::{fmt, str};
 use std::net::{Shutdown, SocketAddr};
 use slog_scope;
 use httparse::{EMPTY_HEADER, Response};
@@ -25,15 +25,17 @@ pub fn do_tests<'a>(upstream_uri: &'a str, proxy_addr: &SocketAddr)
     )
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Clone)]
 pub enum Status<'a> { Passed
-                    , Failed(&'a str)
+                    , Failed { why: &'a str, bytes: Vec<u8> }
                     }
 
 impl<'a> fmt::Display for Status<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if let &Status::Failed(why) = self {
-            write!(f, "❌\n\t{}", why)
+        if let &Status::Failed { ref why, ref bytes } = self {
+            let response = unsafe { str::from_utf8_unchecked(&bytes) };
+            write!(f, "❌\n\t{why}\nRecieved instead:\n\n{response}"
+                    , why = why, response = response)
         } else {
             write!(f, "✔️\n")
         }
@@ -67,7 +69,7 @@ where T: Test + 'static {
                     future::result(T::check(bytes))
                 })
                 .map(|status| {
-                    println!("\t{}\n", status);
+                    println!("{}\n", status);
                     status
                 });
 
@@ -91,7 +93,7 @@ pub trait Test {
 
     fn run<'a>(uri: &'a str, proxy_addr: &SocketAddr) -> Result<Status<'a>>
     where Self: Sized + 'static {
-        print!("{}...", Self::NAME);
+        print!("{: <78}", format!("{}...", Self::NAME));
         let mut core = Core::new()?;
         let tcp =
             TcpBuilder::new_v4()?
@@ -126,7 +128,10 @@ impl Test for DuplicateContentLength1 {
         let status = if let Some(502) = parsed.code {
             Status::Passed
         } else {
-            Status::Failed("Proxy response status must be 502 Bad Gateway")
+            Status::Failed {
+                why: "Proxy response status must be 502 Bad Gateway",
+                bytes: response.clone()
+            }
         };
 
         Ok(status)
@@ -169,7 +174,10 @@ impl Test for DuplicateContentLength2 {
         let status = if let Some(400) = parsed.code {
             Status::Passed
         } else {
-            Status::Failed("Proxy response status must be 400 Bad Request")
+            Status::Failed {
+                why: "Proxy response status must be 400 Bad Request"
+              , bytes: response.clone()
+          }
         };
 
         Ok(status)
