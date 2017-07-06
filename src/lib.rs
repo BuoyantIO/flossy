@@ -13,6 +13,7 @@ extern crate tokio_proto;
 extern crate tokio_service;
 extern crate tokio_minihttp;
 extern crate httparse;
+extern crate net2;
 
 pub mod downstream;
 pub mod upstream;

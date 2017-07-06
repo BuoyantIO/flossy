@@ -18,13 +18,12 @@ impl Service for Upstream {
         println!("{:?}", request);
         match request.path() {
             "/test1" => {
-                for h in request.headers() {
-                    println!("{:?}", h)
-                }
+                //for h in request.headers() {
+                //    println!("{:?}", h)
+                //}
 
                 // multiple content length headers returned by server
-                response
-                        .header("Content-Length", "45")
+                response.header("Content-Length", "45")
                         .header("Content-Length", "20")
                         .body("aaaaa\
                                aaaaa\
@@ -33,6 +32,12 @@ impl Service for Upstream {
                                aaaaa\
                                aaaaa\0")
                }
+          , "/test2" => {
+              for h in request.headers() {
+                  println!("{:?}", h)
+              }
+              response.body("This shouldn't have happened!")
+          }
 
           , _ => response.status_code(404, "Not Found")
         };
