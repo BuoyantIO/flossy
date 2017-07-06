@@ -91,7 +91,7 @@ pub trait Test {
 
     fn run<'a>(uri: &'a str, proxy_addr: &SocketAddr) -> Result<Status<'a>>
     where Self: Sized + 'static {
-        println!("{}...", Self::NAME);
+        print!("{}...", Self::NAME);
         let mut core = Core::new()?;
         let tcp =
             TcpBuilder::new_v4()?
