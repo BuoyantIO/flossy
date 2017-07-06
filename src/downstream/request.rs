@@ -17,6 +17,7 @@ pub struct Request<'a> {
   , host: &'a str
   , uri: &'a str
   , headers: Vec<&'a str>
+  , body: Option<String>
 }
 
 impl<'a> Request<'a> {
@@ -44,6 +45,12 @@ impl<'a> Request<'a> {
         }
         write!(request, "\r\n")
             .expect("Couldn't write to string!");
+
+        if let Some(ref body) = self.body {
+            write!(request, "{}\r\n", body)
+                .expect("Couldn't write message body to string?")
+        }
+
         request
     }
 
@@ -64,6 +71,11 @@ impl<'a> Request<'a> {
     pub fn with_header<H>(&mut self, header: H) -> &mut Self
     where H: convert::Into<&'a str> {
         self.headers.push(header.into()); self
+    }
+
+    pub fn with_body<B>(&mut self, body: B) -> &mut Self
+    where B: convert::Into<String> {
+        self.body = Some(body.into()); self
     }
 }
 
