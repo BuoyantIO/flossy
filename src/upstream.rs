@@ -39,6 +39,18 @@ impl Service for Upstream {
                   info!("Request should not have been recieved.");
                   response.body("This shouldn't have happened!")
               })
+          , "/chunked_and_content_length1" =>
+                if request.headers().any(|(name, _)| name == "Content-Length") {
+                     response.body("Proxy must remove Content-Length header!")
+                             .status_code(400, "Bad Request")
+                } else if (request.body().len() <= 20) {
+                    response.body(&format!("message body was the incorrect \
+                                           length ({} instead of 50)",
+                                           request.body().len()))
+                            .status_code(400, "Bad Request")
+                 } else {
+                     response.status_code(200, "OK")
+                 }
 
           , _ => response.status_code(404, "Not Found")
         };

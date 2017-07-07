@@ -20,6 +20,7 @@ pub fn do_tests<'a>(upstream_uri: &'a str, proxy_addr: &SocketAddr)
         , || {
             DuplicateContentLength1::run(upstream_uri, &proxy_addr).unwrap();
             DuplicateContentLength2::run(upstream_uri, &proxy_addr).unwrap();
+            RequestChunked1::run(upstream_uri, &proxy_addr).unwrap();
             Ok(())
          }
     )
@@ -28,16 +29,23 @@ pub fn do_tests<'a>(upstream_uri: &'a str, proxy_addr: &SocketAddr)
 #[derive(Debug, Clone)]
 pub enum Status<'a> { Passed
                     , Failed { why: &'a str, bytes: Vec<u8> }
+                    , FailedMessage { idx: usize, text: String }
                     }
 
 impl<'a> fmt::Display for Status<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if let &Status::Failed { ref why, ref bytes } = self {
-            let response = unsafe { str::from_utf8_unchecked(&bytes) };
-            write!(f, "❌\n\t{why}\nRecieved instead:\n\n{response}"
-                    , why = why, response = response)
-        } else {
-            write!(f, "✔️\n")
+        match *self {
+            Status::Failed { ref why, ref bytes } =>
+                write!(f, "❌\n\t{why}\nRecieved instead:\n\n{response}"
+                        , why = why
+                        , response = unsafe { str::from_utf8_unchecked(&bytes) }
+                    )
+          , Status::FailedMessage { idx, ref text } =>
+              write!(f, "❌\n\t{why}\nRecieved instead:\n\n{response}"
+                      , why = &text[idx..]
+                      , response = text
+                  )
+          , Status::Passed => write!(f, "✔️\n")
         }
     }
 }
@@ -178,6 +186,49 @@ impl Test for DuplicateContentLength2 {
                 why: "Proxy response status must be 400 Bad Request"
               , bytes: response.clone()
           }
+        };
+
+        Ok(status)
+    }
+}
+
+struct RequestChunked1;
+
+impl Test for RequestChunked1 {
+    const NAME: &'static str =
+        "Bad Framing: request with Content-Length and chunked encoding";
+
+    fn request<'a>(uri: &'a str) -> String {
+        Request::new()
+            .with_path("/chunked_and_content_length1")
+            .with_header("Content-Length: 20")
+            .with_header("Transfer-Encoding: chunked")
+            .with_header("Connection: close")
+            .with_host(uri)
+            .with_body("aaaaabbbbb\
+                        aaaaabbbbb\
+                        aaaaabbbbb\
+                        aaaaabbbbb\
+                        aaaaabbbbb")
+            .build()
+    }
+
+    fn check<'a>(response: Vec<u8>) -> Result<Status<'a>> {
+        let mut headers = [EMPTY_HEADER; 16];
+        let mut parsed = Response::new(&mut headers);
+        let _ = parsed.parse(&response)
+                      .map_err(|e| Error::new(ErrorKind::Other, e))?;
+
+        let status = if let Some(200) = parsed.code {
+            Status::Passed
+        } else {
+            let text = str::from_utf8(&response)
+                .map_err(|e| Error::new(ErrorKind::Other, e))
+                .map(String::from)?;
+            let msg_index = text
+                .find("Proxy must")
+                .unwrap_or(0);
+            Status::FailedMessage { idx: msg_index, text: text }
         };
 
         Ok(status)

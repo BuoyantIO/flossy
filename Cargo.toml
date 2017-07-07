@@ -25,6 +25,6 @@ tokio-proto = "0.1"
 tokio-service = "0.1"
 net2 = "0.2.29"
 
-tokio-minihttp = { git = "https://github.com/tokio-rs/tokio-minihttp" }
+tokio-minihttp = { git = "https://github.com/hawkw/tokio-minihttp.git" }
 
 httparse = "1.2.3"
