@@ -5,7 +5,7 @@ use net2::TcpBuilder;
 use futures::future::{self, Future};
 use std::io::{Error, ErrorKind, Result};
 use std::{fmt, str};
-use std::net::{Shutdown, SocketAddr};
+use std::net::SocketAddr;
 use slog_scope;
 use httparse::{EMPTY_HEADER, Response};
 
