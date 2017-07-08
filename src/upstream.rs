@@ -44,9 +44,12 @@ impl Service for Upstream {
                      response.body("Proxy must remove Content-Length header!")
                              .status_code(400, "Bad Request")
                 } else if (request.body().len() <= 20) {
-                    response.body(&format!("message body was the incorrect \
-                                           length ({} instead of 50)",
-                                           request.body().len()))
+                    response.body(&format!(
+                                "Proxy must obey chunked encoding rather than \
+                                 Content-Length header.\n\
+                                 Message body was the incorrect length ({} \
+                                 instead of 50)",
+                                request.body().len()))
                             .status_code(400, "Bad Request")
                  } else {
                      response.status_code(200, "OK")
