@@ -4,8 +4,10 @@ version = "0.0.1"
 authors = ["Eliza Weisman <eliza@buoyant.io>"]
 readme = "README.md"
 license = "Apache 2.0"
-repository = "https://github.com/buoyant/flossy"
+repository = "https://github.com/BuoyantIO/flossy"
+homepage = "https://github.com/BuoyantIO/flossy"
 description = "a tool for testing standard compliance of HTTP proxies"
+categories = ["command-line-utilities"]
 
 [[bin]]
 path = "bin/main.rs"
