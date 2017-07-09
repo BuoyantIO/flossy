@@ -10,7 +10,7 @@ use std::default::Default;
 use std::convert;
 use std::fmt::{self, Write};
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Request<'a> {
     verb: Verb
   , version: &'a str

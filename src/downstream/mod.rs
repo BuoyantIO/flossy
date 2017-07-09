@@ -13,8 +13,8 @@ mod request;
 pub use self::request::*;
 #[cfg(test)] mod test;
 
-pub fn do_tests<'a, T>(upstream_uri: &'a str, proxy_addr: &SocketAddr,
-                       tests: &[Test])
+pub fn do_tests<'a>(upstream_uri: &'a str, proxy_addr: &SocketAddr,
+                       tests: &[&'static Test])
                        -> Result<()> {
     slog_scope::scope(
         &slog_scope::logger().new(slog_o!("component" => "downstream"))
@@ -51,23 +51,23 @@ impl fmt::Display for Status {
     }
 }
 
+type Check = (Fn(Vec<u8>) -> Result<Status>) + Sync;
+
 // TODO: it might be prettier (and involve fewer `Box`es) if we implemented
 //       `Future` for `Test` rather than having a `Test` make `Future`s?
 //          - eliza, 07/2/2017
-
-
 // TODO: can we add in-depth descriptions to these tests as well, a la
 //      `rustc --explain`?
 //          - eliza, 07/2/2017
 pub struct Test {
-    /// function to generate the HTTP request that this test will
+    /// the name of the test
+    pub name: &'static str
+  , /// function to generate the HTTP request that this test will
     /// send to the proxy
-    request: &'static Fn(&str) -> String
+    request: Request<'static>
   , /// function to check whether the HTTP response returned by the
     /// proxy is correct
-    check: &'static Fn(Vec<u8>) -> Result<Status>
-  , /// the name of the test
-    pub name: &'static str
+    check: Box<Check>
 }
 
 impl Test {
@@ -76,7 +76,7 @@ impl Test {
     fn future<'a>(&'a self, upstream_uri: &'a str, socket: TcpStream)
                      -> impl Future<Item=Status, Error=Error> + 'a {
 
-        let request = (self.request)(upstream_uri);
+        let request = self.request.clone().with_host(upstream_uri).build();
         debug!("built request:\n{}", request);
         let request = request.into_bytes();
         // send the HTTP request for this test...
@@ -102,6 +102,7 @@ impl Test {
         status
     }
 
+    /// run the test against the specified proxy
     pub fn run<'a>(&'a self, uri: &'a str, proxy_addr: &SocketAddr)
                    -> Result<Status> {
         print!("{: <78}", format!("{}...", self.name));
@@ -115,6 +116,34 @@ impl Test {
                 .and_then(move |socket| self.future(uri, socket));
         core.run(test)
     }
+}
+
+lazy_static! {
+    pub static ref CONFLICTING_CONTENT_LENGTH_RESP: Test = {
+        let mut request = Request::new();
+        request.with_path("/test1")
+               .with_header("Connection: close");
+        Test { name: "Bad framing: conflicting Content-Length headers in \
+                      response"
+             , request: request
+             , check: Box::new(|response: Vec<u8>| -> Result<Status> {
+                    let mut headers = [EMPTY_HEADER; 16];
+                    let mut parsed = Response::new(&mut headers);
+                    let _ = parsed.parse(&response)
+                                  .map_err(|e| Error::new(ErrorKind::Other, e))?;
+                    let status = if let Some(502) = parsed.code {
+                        Status::Passed
+                    } else {
+                        Status::Failed {
+                            why: "Proxy response status must be 502 Bad Gateway",
+                            bytes: response.clone()
+                        }
+                    };
+
+                    Ok(status)
+                })
+        }
+    };
 }
 
 //

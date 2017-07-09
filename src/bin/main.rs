@@ -16,8 +16,7 @@ extern crate slog_stdlog;
 extern crate slog;
 
 use slog::Drain;
-
-//extern crate slog_async;
+use flossy::downstream::*;
 
 fn main () {
     let decorator = slog_term::TermDecorator::new().build();
@@ -57,8 +56,8 @@ fn main () {
     thread::Builder::new()
         .spawn(move || flossy::upstream::serve(addr))
         .unwrap();
-
-    flossy::downstream::do_tests(&upstream_uri, &proxy_addr)
+    let default_tests: [&'static Test; 1] = [&CONFLICTING_CONTENT_LENGTH_RESP];
+    flossy::downstream::do_tests(&upstream_uri, &proxy_addr, &default_tests)
         .unwrap();
 
 
