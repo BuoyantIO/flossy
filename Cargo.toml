@@ -1,6 +1,6 @@
 [package]
 name = "flossy"
-version = "0.0.1"
+version = "0.0.2"
 authors = ["Eliza Weisman <eliza@buoyant.io>"]
 readme = "README.md"
 license = "Apache 2.0"
