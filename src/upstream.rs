@@ -44,14 +44,16 @@ impl Service for Upstream {
                         response.body("Proxy must remove `Content-Length` \
                                        header!")
                                 .status_code(400, "Bad Request")
-                    } else if (request.body().len() <= 20) {
+                    } else if request.body().len() <= 20 {
                         info!("Request body was the wrong length");
-                        response.body(&format!(
-                                    "Proxy must obey chunked encoding rather \
-                                     than `Content-Length` header.\n\
-                                     Message body was the incorrect length ({} \
-                                     instead of 50)",
-                                    request.body().len()))
+                        let message = format!(
+                            "Proxy must obey chunked encoding rather \
+                             than `Content-Length` header.\n\
+                             Message body was the incorrect length ({} \
+                             instead of 50)",
+                            request.body().len()
+                        );
+                        response.body(&message)
                                 .status_code(400, "Bad Request")
                     } else {
                         info!("Request was handled successfully");

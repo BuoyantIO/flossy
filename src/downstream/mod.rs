@@ -8,7 +8,6 @@ use std::io::{Error, ErrorKind, Result};
 use std::{fmt, str};
 use std::net::SocketAddr;
 
-use slog_scope;
 use httparse::{EMPTY_HEADER, Response};
 
 use indicatif::{ProgressBar, ProgressStyle};
