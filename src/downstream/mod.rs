@@ -10,7 +10,7 @@ use slog_scope;
 use httparse::{EMPTY_HEADER, Response};
 
 use indicatif::{ProgressBar, ProgressStyle};
-use console::Emoji;
+use console::{Emoji, StyledObject, style};
 
 mod request;
 pub use self::request::*;
@@ -27,9 +27,8 @@ pub fn do_tests<'a>(upstream_uri: &'a str, proxy_addr: &SocketAddr,
     // test results iterator
     let progress = ProgressBar::new(tests.len() as u64);
     let sty = ProgressStyle::default_bar()
-      .template("Flossing... {spinner:.green}{msg} \
-                 {bar:40.cyan/blue} {pos}/{len}");
-     progress.set_style(sty);
+      .template("Flossing... {msg}\n{bar:60.cyan/blue} {pos}/{len}");
+    progress.set_style(sty);
     let results = progress.wrap_iter(results);
 
     // collect the iterator into vectors of successes and failures
@@ -37,9 +36,21 @@ pub fn do_tests<'a>(upstream_uri: &'a str, proxy_addr: &SocketAddr,
     let (successes, failures): (Vec<TestResult>, Vec<TestResult>) =
         results.partition(TestResult::is_passed);
 
-    progress.finish_with_message("done!");
-    println!("{} successes, {} failures"
-            , successes.len(), failures.len());
+    // display results
+    let summary =
+        format!( "{} successes, {} failures"
+                , successes.len(), failures.len());
+    progress.finish_with_message(&summary);
+
+    for success in successes {
+        println!("{}", style(success).green())
+    }
+
+    for failure in failures {
+        println!("{}", style(failure).red())
+    }
+
+
 }
 
 #[derive(Debug)]
@@ -51,7 +62,17 @@ pub struct TestResult {
 
 impl fmt::Display for TestResult {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        unimplemented!()
+        write!( f, "{emoji} {name}: {desc}\n{status:<4}"
+              , emoji = self.emoji()
+              , name = style(self.name).bold()
+              , desc = style(self.description).bold()
+              , status = self.status.as_ref()
+                             .map(|s| format!("{}", s))
+                             .unwrap_or_else(|e| format!("{}", e))
+                             .lines()
+                             .map(|s| format!("  {}\n", s))
+                             .collect::<String>()
+            )
     }
 }
 
@@ -62,9 +83,17 @@ impl TestResult {
           , _ => false
         }
     }
+
+    pub fn emoji(&self) -> StyledObject<Emoji> {
+        match self.status {
+            Ok(Status::Passed) => style(Emoji("✔️", "+")).green()
+          , Ok(_) => style(Emoji("✖️", "x")).red()
+          , Err(_) => style(Emoji("❗", "!")).red().dim()
+        }
+    }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum Status { Passed
                 , Failed { why: &'static str, bytes: Vec<u8> }
                 , FailedMessage { idx: usize, text: String }
@@ -74,18 +103,16 @@ impl fmt::Display for Status {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Status::Failed { ref why, ref bytes } =>
-                write!( f, "{emoji}\n\t{why}\nRecieved instead:\n\n{response}"
-                      , emoji = Emoji("✖️", "x")
+                write!( f, "{why}\nRecieved instead:\n\n{response}"
                       , why = why
                       , response = unsafe { str::from_utf8_unchecked(&bytes) }
                     )
           , Status::FailedMessage { idx, ref text } =>
-              write!( f, "{emoji}\n\t{why}\nRecieved instead:\n\n{response}"
-                    , emoji = Emoji("✖️", "x")
+              write!( f, "{why}\nRecieved instead:\n\n{response}"
                     , why = &text[idx..]
                     , response = text
                   )
-          , Status::Passed => write!(f, "{emoji}\n", emoji = Emoji("✔️", "+"))
+          , Status::Passed => write!(f, "")
         }
     }
 }
