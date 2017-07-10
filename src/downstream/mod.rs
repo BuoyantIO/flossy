@@ -8,6 +8,7 @@ use std::{fmt, str};
 use std::net::SocketAddr;
 use slog_scope;
 use httparse::{EMPTY_HEADER, Response};
+use indicatif::{ProgressBar, ProgressStyle};
 
 mod request;
 pub use self::request::*;
@@ -19,9 +20,23 @@ pub fn do_tests<'a>(upstream_uri: &'a str, proxy_addr: &SocketAddr,
     slog_scope::scope(
         &slog_scope::logger().new(slog_o!("component" => "downstream"))
         , || {
-            for ref test in tests {
-                test.run(upstream_uri, proxy_addr)?;
+            let sty = ProgressStyle::default_bar()
+              .template("Flossing... {spinner:.green}{msg} \
+                         {bar:40.cyan/blue} {pos}/{len}");
+            let progress = ProgressBar::new(tests.len() as u64);
+            progress.set_style(sty);
+            let results = progress.wrap_iter(tests.iter())
+                .map(|test| test.run(upstream_uri, proxy_addr).unwrap());
+            let (successes, failures): (Vec<Status>, Vec<Status>) =
+                results.partition(Status::is_passed);
+            progress.finish_with_message("done!");
+            println!("{} successes, {} failures"
+                    , successes.len(), failures.len());
+
+            for failure in failures {
+
             }
+
             Ok(())
          }
     )
@@ -32,6 +47,14 @@ pub enum Status { Passed
                 , Failed { why: &'static str, bytes: Vec<u8> }
                 , FailedMessage { idx: usize, text: String }
                 }
+impl Status {
+    pub fn is_passed(&self) -> bool {
+        match *self {
+            Status::Passed => true
+          , _ => false
+        }
+    }
+}
 
 impl fmt::Display for Status {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -93,10 +116,11 @@ impl Test {
         let status =
             response.and_then(move |(_, bytes)|
                         future::result((self.check)(bytes)) )
-                    .map(|status| {
-                        println!("{}\n", status);
-                        status
-                    });
+                    //.map(|status| {
+                    //    println!("{}\n", status);
+                    //    status
+                    //})
+                    ;
 
         // ...and we're done!
         status
@@ -105,7 +129,7 @@ impl Test {
     /// run the test against the specified proxy
     pub fn run<'a>(&'a self, uri: &'a str, proxy_addr: &SocketAddr)
                    -> Result<Status> {
-        print!("{: <78}", format!("{}...", self.name));
+        //print!("{: <78}", format!("{}...", self.name));
         let mut core = Core::new()?;
         let tcp =
             TcpBuilder::new_v4()?

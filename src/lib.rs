@@ -23,6 +23,8 @@ extern crate net2;
 extern crate slog;
 extern crate slog_scope;
 
+extern crate indicatif;
+
 #[macro_use]
 extern crate log;
 
