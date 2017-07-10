@@ -8,7 +8,9 @@ use std::{fmt, str};
 use std::net::SocketAddr;
 use slog_scope;
 use httparse::{EMPTY_HEADER, Response};
+
 use indicatif::{ProgressBar, ProgressStyle};
+use console::Emoji;
 
 mod request;
 pub use self::request::*;
@@ -17,29 +19,42 @@ pub use self::request::*;
 pub fn do_tests<'a>(upstream_uri: &'a str, proxy_addr: &SocketAddr,
                     tests: &[&'static Test])
                     -> Result<()> {
-    slog_scope::scope(
-        &slog_scope::logger().new(slog_o!("component" => "downstream"))
-        , || {
-            let sty = ProgressStyle::default_bar()
-              .template("Flossing... {spinner:.green}{msg} \
-                         {bar:40.cyan/blue} {pos}/{len}");
-            let progress = ProgressBar::new(tests.len() as u64);
-            progress.set_style(sty);
-            let results = progress.wrap_iter(tests.iter())
-                .map(|test| test.run(upstream_uri, proxy_addr).unwrap());
-            let (successes, failures): (Vec<Status>, Vec<Status>) =
-                results.partition(Status::is_passed);
-            progress.finish_with_message("done!");
-            println!("{} successes, {} failures"
-                    , successes.len(), failures.len());
+    let sty = ProgressStyle::default_bar()
+      .template("Flossing... {spinner:.green}{msg} \
+                 {bar:40.cyan/blue} {pos}/{len}");
+    let progress = ProgressBar::new(tests.len() as u64);
+    progress.set_style(sty);
+    let results = progress.wrap_iter(tests.iter())
+        .map(|test| test.run(upstream_uri, proxy_addr));
+    let (successes, failures): (Vec<TestResult>, Vec<TestResult>) =
+        results.partition(TestResult::is_passed);
+    progress.finish_with_message("done!");
+    println!("{} successes, {} failures"
+            , successes.len(), failures.len());
 
-            for failure in failures {
+    Ok(())
+}
 
-            }
+#[derive(Debug)]
+pub struct TestResult {
+    pub name: &'static str
+  , pub description: &'static str
+  , pub status: Result<Status>
+}
 
-            Ok(())
-         }
-    )
+impl fmt::Display for TestResult {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        unimplemented!()
+    }
+}
+
+impl TestResult {
+    pub fn is_passed(&self) -> bool {
+        match self.status {
+            Ok(Status::Passed) => true
+          , _ => false
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -47,29 +62,23 @@ pub enum Status { Passed
                 , Failed { why: &'static str, bytes: Vec<u8> }
                 , FailedMessage { idx: usize, text: String }
                 }
-impl Status {
-    pub fn is_passed(&self) -> bool {
-        match *self {
-            Status::Passed => true
-          , _ => false
-        }
-    }
-}
 
 impl fmt::Display for Status {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Status::Failed { ref why, ref bytes } =>
-                write!(f, "❌\n\t{why}\nRecieved instead:\n\n{response}"
-                        , why = why
-                        , response = unsafe { str::from_utf8_unchecked(&bytes) }
+                write!( f, "{emoji}\n\t{why}\nRecieved instead:\n\n{response}"
+                      , emoji = Emoji("✖️", "x")
+                      , why = why
+                      , response = unsafe { str::from_utf8_unchecked(&bytes) }
                     )
           , Status::FailedMessage { idx, ref text } =>
-              write!(f, "❌\n\t{why}\nRecieved instead:\n\n{response}"
-                      , why = &text[idx..]
-                      , response = text
+              write!( f, "{emoji}\n\t{why}\nRecieved instead:\n\n{response}"
+                    , emoji = Emoji("✖️", "x")
+                    , why = &text[idx..]
+                    , response = text
                   )
-          , Status::Passed => write!(f, "✔️\n")
+          , Status::Passed => write!(f, "{emoji}\n", emoji = Emoji("✔️", "+"))
         }
     }
 }
@@ -85,6 +94,8 @@ type Check = (Fn(Vec<u8>) -> Result<Status>) + Sync;
 pub struct Test {
     /// the name of the test
     pub name: &'static str
+  , /// a longer string describing the test
+    pub description: &'static str
   , /// function to generate the HTTP request that this test will
     /// send to the proxy
     request: Request<'static>
@@ -126,10 +137,9 @@ impl Test {
         status
     }
 
-    /// run the test against the specified proxy
-    pub fn run<'a>(&'a self, uri: &'a str, proxy_addr: &SocketAddr)
-                   -> Result<Status> {
-        //print!("{: <78}", format!("{}...", self.name));
+    #[inline(always)]
+    fn run_inner<'a>(&'a self, uri: &'a str, proxy_addr: &SocketAddr)
+                    -> Result<Status> {
         let mut core = Core::new()?;
         let tcp =
             TcpBuilder::new_v4()?
@@ -139,6 +149,19 @@ impl Test {
             TcpStream::connect_stream(tcp, proxy_addr, &core.handle())
                 .and_then(move |socket| self.future(uri, socket));
         core.run(test)
+
+    }
+
+    /// run the test against the specified proxy
+    pub fn run<'a>(&'a self, uri: &'a str, proxy_addr: &SocketAddr)
+                   -> TestResult {
+        //print!("{: <78}", format!("{}...", self.description));
+        slog_scope::scope(
+            &slog_scope::logger().new(slog_o!("test" => self.name)),
+            || TestResult { name: self.name
+                          , description: self.description
+                          , status: self.run_inner(uri, proxy_addr)
+                          })
     }
 }
 
@@ -147,8 +170,8 @@ lazy_static! {
         let mut request = Request::new();
         request.with_path("/test1")
                .with_header("Connection: close");
-        Test { name: "Bad framing: conflicting Content-Length headers in \
-                      response"
+        Test { name: "Bad Framing 1"
+             , description: "Conflicting Content-Length headers in response"
              , request: request
              , check: Box::new(|response: Vec<u8>| -> Result<Status> {
                     let mut headers = [EMPTY_HEADER; 16];
@@ -180,8 +203,8 @@ lazy_static! {
                            aaaaabbbbb\
                            aaaaabbbbb\
                            aaaaa");
-        Test { name: "Bad framing: conflicting Content-Length headers in \
-                      request"
+        Test { name: "Bad Framing 2"
+             , description: "Conflicting Content-Length headers in request"
              , request: request
              , check: Box::new(|response: Vec<u8>| -> Result<Status> {
                  let mut headers = [EMPTY_HEADER; 16];
@@ -214,8 +237,9 @@ lazy_static! {
                           aaaaabbbbb\
                           aaaaabbbbb");
 
-        Test { name: "Bad framing: conflicting `Content-Length` and \
-                      `Transfer-Encoding: Chunked` headers in request."
+        Test { name: "Bad Framing 3"
+             , description: "Conflicting `Content-Length` and \
+                            `Transfer-Encoding: Chunked` headers in request."
              , request: request
              , check: Box::new(|response: Vec<u8>| -> Result<Status> {
                  let mut headers = [EMPTY_HEADER; 16];
