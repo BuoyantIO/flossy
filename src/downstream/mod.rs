@@ -1,11 +1,13 @@
-use tokio_core::net::{TcpStream, TcpStreamNew};
+use tokio_core::net::TcpStream;
 use tokio_core::reactor::Core;
 use tokio_io::io;
 use net2::TcpBuilder;
 use futures::future::{self, Future};
+
 use std::io::{Error, ErrorKind, Result};
 use std::{fmt, str};
 use std::net::SocketAddr;
+
 use slog_scope;
 use httparse::{EMPTY_HEADER, Response};
 
