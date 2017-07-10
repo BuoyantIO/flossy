@@ -17,22 +17,29 @@ pub use self::request::*;
 #[cfg(test)] mod test;
 
 pub fn do_tests<'a>(upstream_uri: &'a str, proxy_addr: &SocketAddr,
-                    tests: &[&'static Test])
-                    -> Result<()> {
+                    tests: &[&'static Test]) {
+
+    // iterator of test results
+    let results = tests.iter()
+        .map(|test| test.run(upstream_uri, proxy_addr));
+
+    // create the progress bar, style it, and attach it to the
+    // test results iterator
+    let progress = ProgressBar::new(tests.len() as u64);
     let sty = ProgressStyle::default_bar()
       .template("Flossing... {spinner:.green}{msg} \
                  {bar:40.cyan/blue} {pos}/{len}");
-    let progress = ProgressBar::new(tests.len() as u64);
-    progress.set_style(sty);
-    let results = progress.wrap_iter(tests.iter())
-        .map(|test| test.run(upstream_uri, proxy_addr));
+     progress.set_style(sty);
+    let results = progress.wrap_iter(results);
+
+    // collect the iterator into vectors of successes and failures
+    // (this is where the tests actually are run)
     let (successes, failures): (Vec<TestResult>, Vec<TestResult>) =
         results.partition(TestResult::is_passed);
+
     progress.finish_with_message("done!");
     println!("{} successes, {} failures"
             , successes.len(), failures.len());
-
-    Ok(())
 }
 
 #[derive(Debug)]
@@ -85,9 +92,6 @@ impl fmt::Display for Status {
 
 type Check = (Fn(Vec<u8>) -> Result<Status>) + Sync;
 
-// TODO: it might be prettier (and involve fewer `Box`es) if we implemented
-//       `Future` for `Test` rather than having a `Test` make `Future`s?
-//          - eliza, 07/2/2017
 // TODO: can we add in-depth descriptions to these tests as well, a la
 //      `rustc --explain`?
 //          - eliza, 07/2/2017

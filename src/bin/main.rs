@@ -10,6 +10,7 @@ extern crate slog_term;
 extern crate slog_scope;
 extern crate slog_async;
 extern crate slog_stdlog;
+extern crate indicatif;
 
 /// Import longer-name versions of macros only to not collide with legacy `log`
 #[macro_use(slog_o, slog_kv)]
@@ -53,16 +54,17 @@ fn main () {
     let upstream_uri = format!("127.0.0.1:{}", port);
     let addr: SocketAddr = upstream_uri.parse().unwrap();
 
+    // start the downstream server
     thread::Builder::new()
         .spawn(move || flossy::upstream::serve(addr))
         .unwrap();
+
+    // run tests
     let default_tests: [&'static Test; 3] =
         [ &CONFLICTING_CONTENT_LENGTH_RESP
         , &CONFLICTING_CONTENT_LENGTH_REQ
         , &CONFLICTING_TRANSFER_ENCOING_REQ
         ];
-    flossy::downstream::do_tests(&upstream_uri, &proxy_addr, &default_tests)
-        .unwrap();
-
+    flossy::downstream::do_tests(&upstream_uri, &proxy_addr, &default_tests);
 
 }
