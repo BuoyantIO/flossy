@@ -31,5 +31,15 @@ extern crate log;
 #[macro_use]
 extern crate lazy_static;
 
+// a macro to reduce boilerplate when using slog_scope
+macro_rules! scoped {
+    ($($a:expr => $b:expr),+; $body:block) => {
+        ::slog_scope::scope(
+            &::slog_scope::logger().new(slog_o!( $($a => $b),+ ) ),
+            || $body
+        )
+    };
+}
+
 pub mod downstream;
 pub mod upstream;

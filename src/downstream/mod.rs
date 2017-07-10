@@ -188,13 +188,14 @@ impl Test {
     /// run the test against the specified proxy
     pub fn run<'a>(&'a self, uri: &'a str, proxy_addr: &SocketAddr)
                    -> TestResult {
-        //print!("{: <78}", format!("{}...", self.description));
-        slog_scope::scope(
-            &slog_scope::logger().new(slog_o!("test" => self.name)),
-            || TestResult { name: self.name
-                          , description: self.description
-                          , status: self.run_inner(uri, proxy_addr)
-                          })
+        scoped! {
+            "component" => "upstream", "test" => self.name; {
+                TestResult { name: self.name
+                           , description: self.description
+                           , status: self.run_inner(uri, proxy_addr)
+                           }
+            }
+        }
     }
 }
 
