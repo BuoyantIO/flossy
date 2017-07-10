@@ -18,8 +18,7 @@ extern crate httparse;
 extern crate net2;
 
 /// Import longer-name versions of macros only to not collide with legacy `log`
-#[macro_use(slog_error, slog_info, slog_trace, slog_log, slog_o, slog_record,
-            slog_record_static, slog_b, slog_kv)]
+#[macro_use(slog_o, slog_kv)]
 extern crate slog;
 extern crate slog_scope;
 
@@ -31,6 +30,16 @@ extern crate log;
 
 #[macro_use]
 extern crate lazy_static;
+
+// a macro to reduce boilerplate when using slog_scope
+macro_rules! scoped {
+    ($($a:expr => $b:expr),+; $body:block) => {
+        ::slog_scope::scope(
+            &::slog_scope::logger().new(slog_o!( $($a => $b),+ ) ),
+            || $body
+        )
+    };
+}
 
 pub mod downstream;
 pub mod upstream;

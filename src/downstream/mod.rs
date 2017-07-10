@@ -1,12 +1,13 @@
-use tokio_core::net::{TcpStream, TcpStreamNew};
+use tokio_core::net::TcpStream;
 use tokio_core::reactor::Core;
 use tokio_io::io;
 use net2::TcpBuilder;
 use futures::future::{self, Future};
+
 use std::io::{Error, ErrorKind, Result};
 use std::{fmt, str};
 use std::net::SocketAddr;
-use slog_scope;
+
 use httparse::{EMPTY_HEADER, Response};
 
 use indicatif::{ProgressBar, ProgressStyle};
@@ -138,8 +139,8 @@ pub struct Test {
 impl Test {
 
     /// returns a future running the test against the specified proxy
-    fn future<'a>(&'a self, upstream_uri: &'a str, socket: TcpStream)
-                     -> impl Future<Item=Status, Error=Error> + 'a {
+    pub fn future<'a>(&'a self, upstream_uri: &'a str, socket: TcpStream)
+                      -> impl Future<Item=Status, Error=Error> + 'a {
 
         let request = self.request.clone().with_host(upstream_uri).build();
         debug!("built request:\n{}", request);
@@ -168,6 +169,11 @@ impl Test {
         status
     }
 
+    /// wrapper around what was previously the inner portion of `run`
+    /// so that the function has the return type `Result<Status>` instead
+    /// of `TestResult`. this is just so that I can use the question mark
+    /// operator (which requires a `Result` return type)
+    // TODO: there's probably a more idiomatic way to do that?
     #[inline(always)]
     fn run_inner<'a>(&'a self, uri: &'a str, proxy_addr: &SocketAddr)
                     -> Result<Status> {
@@ -186,13 +192,14 @@ impl Test {
     /// run the test against the specified proxy
     pub fn run<'a>(&'a self, uri: &'a str, proxy_addr: &SocketAddr)
                    -> TestResult {
-        //print!("{: <78}", format!("{}...", self.description));
-        slog_scope::scope(
-            &slog_scope::logger().new(slog_o!("test" => self.name)),
-            || TestResult { name: self.name
-                          , description: self.description
-                          , status: self.run_inner(uri, proxy_addr)
-                          })
+        scoped! {
+            "component" => "upstream", "test" => self.name; {
+                TestResult { name: self.name
+                           , description: self.description
+                           , status: self.run_inner(uri, proxy_addr)
+                           }
+            }
+        }
     }
 }
 
