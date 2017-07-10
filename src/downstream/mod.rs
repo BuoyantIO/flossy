@@ -249,11 +249,11 @@ lazy_static! {
                  let mut parsed = Response::new(&mut headers);
                  let _ = parsed.parse(&response)
                                .map_err(|e| Error::new(ErrorKind::Other, e))?;
-                 let status = if let Some(502) = parsed.code {
+                 let status = if let Some(400) = parsed.code {
                      Status::Passed
                  } else {
                      Status::Failed {
-                         why: "Proxy response status must be 502 Bad Gateway",
+                         why: "Proxy response status must be 400 Bad Request",
                          bytes: response.clone()
                      }
                  };
