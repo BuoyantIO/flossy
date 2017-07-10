@@ -34,3 +34,8 @@ net2 = "0.2.29"
 tokio-minihttp = { git = "https://github.com/hawkw/tokio-minihttp.git" }
 
 httparse = "1.2.3"
+
+lazy_static = "0.2.8"
+
+indicatif = "0.6.0"
+console = "0.5.0"

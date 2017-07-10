@@ -23,9 +23,14 @@ extern crate net2;
 extern crate slog;
 extern crate slog_scope;
 
+extern crate indicatif;
+extern crate console;
+
 #[macro_use]
 extern crate log;
 
+#[macro_use]
+extern crate lazy_static;
 
 pub mod downstream;
 pub mod upstream;

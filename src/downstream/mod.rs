@@ -9,99 +9,168 @@ use std::net::SocketAddr;
 use slog_scope;
 use httparse::{EMPTY_HEADER, Response};
 
+use indicatif::{ProgressBar, ProgressStyle};
+use console::{Emoji, StyledObject, style};
+
 mod request;
 pub use self::request::*;
 #[cfg(test)] mod test;
 
-pub fn do_tests<'a>(upstream_uri: &'a str, proxy_addr: &SocketAddr)
-                    -> Result<()> {
-    slog_scope::scope(
-        &slog_scope::logger().new(slog_o!("component" => "downstream"))
-        , || {
-            DuplicateContentLength1::run(upstream_uri, &proxy_addr).unwrap();
-            DuplicateContentLength2::run(upstream_uri, &proxy_addr).unwrap();
-            RequestChunked1::run(upstream_uri, &proxy_addr).unwrap();
-            Ok(())
-         }
-    )
+pub fn do_tests<'a>(upstream_uri: &'a str, proxy_addr: &SocketAddr,
+                    tests: &[&'static Test]) {
+
+    // iterator of test results
+    let results = tests.iter()
+        .map(|test| test.run(upstream_uri, proxy_addr));
+
+    // create the progress bar, style it, and attach it to the
+    // test results iterator
+    let progress = ProgressBar::new(tests.len() as u64);
+    let sty = ProgressStyle::default_bar()
+      .template("Flossing... {msg}\n{bar:60.cyan/blue} {pos}/{len}");
+    progress.set_style(sty);
+    let results = progress.wrap_iter(results);
+
+    // collect the iterator into vectors of successes and failures
+    // (this is where the tests actually are run)
+    let (successes, failures): (Vec<TestResult>, Vec<TestResult>) =
+        results.partition(TestResult::is_passed);
+
+    // display results
+    let summary =
+        format!( "{} successes, {} failures"
+                , successes.len(), failures.len());
+    progress.finish_with_message(&summary);
+
+    for success in successes {
+        println!("{}", style(success).green())
+    }
+
+    for failure in failures {
+        println!("{}", style(failure).red())
+    }
+
+
 }
 
-#[derive(Debug, Clone)]
-pub enum Status<'a> { Passed
-                    , Failed { why: &'a str, bytes: Vec<u8> }
-                    , FailedMessage { idx: usize, text: String }
-                    }
+#[derive(Debug)]
+pub struct TestResult {
+    pub name: &'static str
+  , pub description: &'static str
+  , pub status: Result<Status>
+}
 
-impl<'a> fmt::Display for Status<'a> {
+impl fmt::Display for TestResult {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            Status::Failed { ref why, ref bytes } =>
-                write!(f, "❌\n\t{why}\nRecieved instead:\n\n{response}"
-                        , why = why
-                        , response = unsafe { str::from_utf8_unchecked(&bytes) }
-                    )
-          , Status::FailedMessage { idx, ref text } =>
-              write!(f, "❌\n\t{why}\nRecieved instead:\n\n{response}"
-                      , why = &text[idx..]
-                      , response = text
-                  )
-          , Status::Passed => write!(f, "✔️\n")
+        write!( f, "{emoji} {name}: {desc}\n{status:<4}"
+              , emoji = self.emoji()
+              , name = style(self.name).bold()
+              , desc = style(self.description).bold()
+              , status = self.status.as_ref()
+                             .map(|s| format!("{}", s))
+                             .unwrap_or_else(|e| format!("{}", e))
+                             .lines()
+                             .map(|s| format!("  {}\n", s))
+                             .collect::<String>()
+            )
+    }
+}
+
+impl TestResult {
+    pub fn is_passed(&self) -> bool {
+        match self.status {
+            Ok(Status::Passed) => true
+          , _ => false
+        }
+    }
+
+    pub fn emoji(&self) -> StyledObject<Emoji> {
+        match self.status {
+            Ok(Status::Passed) => style(Emoji("✔️", "+")).green()
+          , Ok(_) => style(Emoji("✖️", "x")).red()
+          , Err(_) => style(Emoji("❗", "!")).red().dim()
         }
     }
 }
 
-// TODO: it might be prettier (and involve fewer `Box`es) if we implemented
-//       `Future` for `Test` rather than having a `Test` make `Future`s?
-//          - eliza, 07/2/2017
-/// test_future the test against the proxy test_futurening on `addr`
-///
-/// This is a function rather than a trait method so that it can return
-/// `impl Future`
-fn test_future<'a, T>(upstream_uri: &'a str, socket: TcpStream)
-         -> impl Future<Item=Status<'a>, Error=Error> + 'a
-where T: Test + 'static {
+#[derive(Debug)]
+pub enum Status { Passed
+                , Failed { why: &'static str, bytes: Vec<u8> }
+                , FailedMessage { idx: usize, text: String }
+                }
 
-    let request = T::request(upstream_uri);
-    debug!("built request:\n{}", request);
-    let request = request.into_bytes();
-    // send the HTTP request for this test...
-    let request = io::write_all(socket, request);
-
-    // when we recieve a response, parse the response with httparse...
-    let response = request
-        .and_then(|(socket, _req)| { trace!("recieved {:?}", socket); io::read_to_end(socket, Vec::new()) } );
-
-    // check if the response passes this test...
-    let status =
-        response.and_then(|(_, bytes)| {
-                    future::result(T::check(bytes))
-                })
-                .map(|status| {
-                    println!("{}\n", status);
-                    status
-                });
-
-    // ...and we're done!
-    status
+impl fmt::Display for Status {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            Status::Failed { ref why, ref bytes } =>
+                write!( f, "{why}\nRecieved instead:\n\n{response}"
+                      , why = why
+                      , response = unsafe { str::from_utf8_unchecked(&bytes) }
+                    )
+          , Status::FailedMessage { idx, ref text } =>
+              write!( f, "{why}\nRecieved instead:\n\n{response}"
+                    , why = &text[idx..]
+                    , response = text
+                  )
+          , Status::Passed => write!(f, "")
+        }
+    }
 }
 
-pub trait Test {
-    /// Returns the HTTP request that this test will send to the proxy
-    fn request<'a>(uri: &'a str) -> String;
+type Check = (Fn(Vec<u8>) -> Result<Status>) + Sync;
 
-    /// Check whether the HTTP response returned by the proxy is correct
-    fn check<'a>(response: Vec<u8>) -> Result<Status<'a>>;
+// TODO: can we add in-depth descriptions to these tests as well, a la
+//      `rustc --explain`?
+//          - eliza, 07/2/2017
+pub struct Test {
+    /// the name of the test
+    pub name: &'static str
+  , /// a longer string describing the test
+    pub description: &'static str
+  , /// function to generate the HTTP request that this test will
+    /// send to the proxy
+    request: Request<'static>
+  , /// function to check whether the HTTP response returned by the
+    /// proxy is correct
+    check: Box<Check>
+}
 
-    /// Returns the name of this test
-    const NAME: &'static str;
+impl Test {
 
-    // TODO: can we add in-depth descriptions to these tests as well, a la
-    //       `rustc --explain`?
-    //          - eliza, 07/2/2017
+    /// returns a future running the test against the specified proxy
+    fn future<'a>(&'a self, upstream_uri: &'a str, socket: TcpStream)
+                     -> impl Future<Item=Status, Error=Error> + 'a {
 
-    fn run<'a>(uri: &'a str, proxy_addr: &SocketAddr) -> Result<Status<'a>>
-    where Self: Sized + 'static {
-        print!("{: <78}", format!("{}...", Self::NAME));
+        let request = self.request.clone().with_host(upstream_uri).build();
+        debug!("built request:\n{}", request);
+        let request = request.into_bytes();
+        // send the HTTP request for this test...
+        let request = io::write_all(socket, request);
+
+        // when we recieve a response, parse the response with httparse...
+        let response = request
+            .and_then(|(socket, _req)| {
+                trace!("recieved {:?}", socket);
+                io::read_to_end(socket, Vec::new())
+            });
+
+        // check if the response passes this test...
+        let status =
+            response.and_then(move |(_, bytes)|
+                        future::result((self.check)(bytes)) )
+                    //.map(|status| {
+                    //    println!("{}\n", status);
+                    //    status
+                    //})
+                    ;
+
+        // ...and we're done!
+        status
+    }
+
+    #[inline(always)]
+    fn run_inner<'a>(&'a self, uri: &'a str, proxy_addr: &SocketAddr)
+                    -> Result<Status> {
         let mut core = Core::new()?;
         let tcp =
             TcpBuilder::new_v4()?
@@ -109,128 +178,120 @@ pub trait Test {
                 .to_tcp_stream()?;
         let test =
             TcpStream::connect_stream(tcp, proxy_addr, &core.handle())
-                .and_then(move |socket| test_future::<Self>(uri, socket));
+                .and_then(move |socket| self.future(uri, socket));
         core.run(test)
+
+    }
+
+    /// run the test against the specified proxy
+    pub fn run<'a>(&'a self, uri: &'a str, proxy_addr: &SocketAddr)
+                   -> TestResult {
+        //print!("{: <78}", format!("{}...", self.description));
+        slog_scope::scope(
+            &slog_scope::logger().new(slog_o!("test" => self.name)),
+            || TestResult { name: self.name
+                          , description: self.description
+                          , status: self.run_inner(uri, proxy_addr)
+                          })
     }
 }
 
-struct DuplicateContentLength1;
+lazy_static! {
+    pub static ref CONFLICTING_CONTENT_LENGTH_RESP: Test = {
+        let mut request = Request::new();
+        request.with_path("/test1")
+               .with_header("Connection: close");
+        Test { name: "Bad Framing 1"
+             , description: "Conflicting Content-Length headers in response"
+             , request: request
+             , check: Box::new(|response: Vec<u8>| -> Result<Status> {
+                    let mut headers = [EMPTY_HEADER; 16];
+                    let mut parsed = Response::new(&mut headers);
+                    let _ = parsed.parse(&response)
+                                  .map_err(|e| Error::new(ErrorKind::Other, e))?;
+                    let status = if let Some(502) = parsed.code {
+                        Status::Passed
+                    } else {
+                        Status::Failed {
+                            why: "Proxy response status must be 502 Bad Gateway",
+                            bytes: response.clone()
+                        }
+                    };
 
-impl Test for DuplicateContentLength1 {
-    const NAME: &'static str =
-        "Bad Framing: duplicate Content-Length headers returned by server";
+                    Ok(status)
+                })
+        }
+    };
 
-    fn request<'a>(uri: &'a str) -> String {
-        Request::new()
-            .with_path("/test1")
-            .with_header("Connection: close")
-            .with_host(uri)
-            .build()
-    }
+    pub static ref CONFLICTING_CONTENT_LENGTH_REQ: Test = {
+        let mut request = Request::new();
+        request.with_path("/test2")
+               .with_header("Content-Length: 45")
+               .with_header("Content-Length: 20")
+               .with_header("Connection: close")
+               .with_body("aaaaabbbbb\
+                           aaaaabbbbb\
+                           aaaaabbbbb\
+                           aaaaabbbbb\
+                           aaaaa");
+        Test { name: "Bad Framing 2"
+             , description: "Conflicting Content-Length headers in request"
+             , request: request
+             , check: Box::new(|response: Vec<u8>| -> Result<Status> {
+                 let mut headers = [EMPTY_HEADER; 16];
+                 let mut parsed = Response::new(&mut headers);
+                 let _ = parsed.parse(&response)
+                               .map_err(|e| Error::new(ErrorKind::Other, e))?;
+                 let status = if let Some(502) = parsed.code {
+                     Status::Passed
+                 } else {
+                     Status::Failed {
+                         why: "Proxy response status must be 502 Bad Gateway",
+                         bytes: response.clone()
+                     }
+                 };
 
-    fn check<'a>(response: Vec<u8>) -> Result<Status<'a>> {
-        let mut headers = [EMPTY_HEADER; 16];
-        let mut parsed = Response::new(&mut headers);
-        let _ = parsed.parse(&response)
-                      .map_err(|e| Error::new(ErrorKind::Other, e))?;
-        let status = if let Some(502) = parsed.code {
-            Status::Passed
-        } else {
-            Status::Failed {
-                why: "Proxy response status must be 502 Bad Gateway",
-                bytes: response.clone()
-            }
-        };
+                 Ok(status)
+             })
+       }
+   };
 
-        Ok(status)
-    }
+   pub static ref CONFLICTING_TRANSFER_ENCOING_REQ: Test = {
+       let mut request = Request::new();
+       request.with_path("/chunked_and_content_length1")
+              .with_header("Content-Length: 20")
+              .with_header("Transfer-Encoding: chunked")
+              .with_header("Connection: close")
+              .with_body("aaaaabbbbb\
+                          aaaaabbbbb\
+                          aaaaabbbbb\
+                          aaaaabbbbb\
+                          aaaaabbbbb");
 
+        Test { name: "Bad Framing 3"
+             , description: "Conflicting `Content-Length` and \
+                            `Transfer-Encoding: Chunked` headers in request."
+             , request: request
+             , check: Box::new(|response: Vec<u8>| -> Result<Status> {
+                 let mut headers = [EMPTY_HEADER; 16];
+                 let mut parsed = Response::new(&mut headers);
+                 let _ = parsed.parse(&response)
+                               .map_err(|e| Error::new(ErrorKind::Other, e))?;
 
-}
+                 let status = if let Some(200) = parsed.code {
+                     Status::Passed
+                 } else {
+                     let text = str::from_utf8(&response)
+                         .map_err(|e| Error::new(ErrorKind::Other, e))
+                         .map(String::from)?;
+                     let msg_index = text
+                         .find("Proxy must")
+                         .unwrap_or(0);
+                     Status::FailedMessage { idx: msg_index, text: text }
+                 };
 
-/// Duplicate `Content-Length` headers in request
-struct DuplicateContentLength2;
-
-impl Test for DuplicateContentLength2 {
-    const NAME: &'static str =
-        "Bad Framing: duplicate Content-Length headers in request";
-
-    fn request<'a>(uri: &'a str) -> String {
-        Request::new()
-            .with_path("/test2")
-            .with_header("Content-Length: 45")
-            .with_header("Content-Length: 20")
-            .with_header("Connection: close")
-            .with_host(uri)
-            .with_body("aaaaabbbbb\
-                        aaaaabbbbb\
-                        aaaaabbbbb\
-                        aaaaabbbbb\
-                        aaaaa")
-            .build()
-    }
-
-    fn check<'a>(response: Vec<u8>) -> Result<Status<'a>> {
-        // TODO: we should also enforce that the upstream server never recieved
-        //       this request?
-        //          - eliza, 07/05/2017
-        let mut headers = [EMPTY_HEADER; 16];
-        let mut parsed = Response::new(&mut headers);
-        let _ = parsed.parse(&response)
-                      .map_err(|e| Error::new(ErrorKind::Other, e))?;
-
-        let status = if let Some(400) = parsed.code {
-            Status::Passed
-        } else {
-            Status::Failed {
-                why: "Proxy response status must be 400 Bad Request"
-              , bytes: response.clone()
-          }
-        };
-
-        Ok(status)
-    }
-}
-
-struct RequestChunked1;
-
-impl Test for RequestChunked1 {
-    const NAME: &'static str =
-        "Bad Framing: request with Content-Length and chunked encoding";
-
-    fn request<'a>(uri: &'a str) -> String {
-        Request::new()
-            .with_path("/chunked_and_content_length1")
-            .with_header("Content-Length: 20")
-            .with_header("Transfer-Encoding: chunked")
-            .with_header("Connection: close")
-            .with_host(uri)
-            .with_body("aaaaabbbbb\
-                        aaaaabbbbb\
-                        aaaaabbbbb\
-                        aaaaabbbbb\
-                        aaaaabbbbb")
-            .build()
-    }
-
-    fn check<'a>(response: Vec<u8>) -> Result<Status<'a>> {
-        let mut headers = [EMPTY_HEADER; 16];
-        let mut parsed = Response::new(&mut headers);
-        let _ = parsed.parse(&response)
-                      .map_err(|e| Error::new(ErrorKind::Other, e))?;
-
-        let status = if let Some(200) = parsed.code {
-            Status::Passed
-        } else {
-            let text = str::from_utf8(&response)
-                .map_err(|e| Error::new(ErrorKind::Other, e))
-                .map(String::from)?;
-            let msg_index = text
-                .find("Proxy must")
-                .unwrap_or(0);
-            Status::FailedMessage { idx: msg_index, text: text }
-        };
-
-        Ok(status)
-    }
+                 Ok(status)
+             })
+        }
+   };
 }
