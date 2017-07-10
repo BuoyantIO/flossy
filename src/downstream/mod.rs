@@ -140,8 +140,8 @@ pub struct Test {
 impl Test {
 
     /// returns a future running the test against the specified proxy
-    fn future<'a>(&'a self, upstream_uri: &'a str, socket: TcpStream)
-                     -> impl Future<Item=Status, Error=Error> + 'a {
+    pub fn future<'a>(&'a self, upstream_uri: &'a str, socket: TcpStream)
+                      -> impl Future<Item=Status, Error=Error> + 'a {
 
         let request = self.request.clone().with_host(upstream_uri).build();
         debug!("built request:\n{}", request);
@@ -170,6 +170,11 @@ impl Test {
         status
     }
 
+    /// wrapper around what was previously the inner portion of `run`
+    /// so that the function has the return type `Result<Status>` instead
+    /// of `TestResult`. this is just so that I can use the question mark
+    /// operator (which requires a `Result` return type)
+    // TODO: there's probably a more idiomatic way to do that?
     #[inline(always)]
     fn run_inner<'a>(&'a self, uri: &'a str, proxy_addr: &SocketAddr)
                     -> Result<Status> {
