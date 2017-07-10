@@ -24,6 +24,7 @@ extern crate slog;
 extern crate slog_scope;
 
 extern crate indicatif;
+extern crate console;
 
 #[macro_use]
 extern crate log;

@@ -38,3 +38,4 @@ httparse = "1.2.3"
 lazy_static = "0.2.8"
 
 indicatif = "0.6.0"
+console = "0.5.0"
