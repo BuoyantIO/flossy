@@ -56,7 +56,11 @@ fn main () {
     thread::Builder::new()
         .spawn(move || flossy::upstream::serve(addr))
         .unwrap();
-    let default_tests: [&'static Test; 1] = [&CONFLICTING_CONTENT_LENGTH_RESP];
+    let default_tests: [&'static Test; 3] =
+        [ &CONFLICTING_CONTENT_LENGTH_RESP
+        , &CONFLICTING_CONTENT_LENGTH_REQ
+        , &CONFLICTING_TRANSFER_ENCOING_REQ
+        ];
     flossy::downstream::do_tests(&upstream_uri, &proxy_addr, &default_tests)
         .unwrap();
 
