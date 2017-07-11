@@ -36,7 +36,7 @@ impl Service for Upstream {
               }
           }
           , "/chunked_and_content_length1" => scoped! {
-                "test" => "Bad Framing 2"; {
+                "test" => "Bad Framing 3"; {
                     trace!("{:?}", request);
                     if request.headers()
                               .any(|(name, _)| name == "Content-Length") {
@@ -44,17 +44,18 @@ impl Service for Upstream {
                         response.body("Proxy must remove `Content-Length` \
                                        header!")
                                 .status_code(400, "Bad Request")
-                    } else if request.body().len() <= 20 {
-                        info!("Request body was the wrong length");
-                        let message = format!(
-                            "Proxy must obey chunked encoding rather \
-                             than `Content-Length` header.\n\
-                             Message body was the incorrect length ({} \
-                             instead of 50)",
-                            request.body().len()
-                        );
-                        response.body(&message)
-                                .status_code(400, "Bad Request")
+                    //} else if request.body().len() <= 20 {
+                    //    info!("Request body was the wrong length\n{:?}",
+                    //            request.body());
+                    //    let message = format!(
+                    //        "Proxy must obey chunked encoding rather \
+                    //         than `Content-Length` header.\n\
+                    //         Message body was the incorrect length ({} \
+                    //         instead of 50)",
+                    //        request.body().len()
+                    //    );
+                    //    response.body(&message)
+                    //            .status_code(400, "Bad Request")
                     } else {
                         info!("Request was handled successfully");
                         response.status_code(200, "OK")
